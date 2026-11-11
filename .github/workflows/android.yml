@@ -1,0 +1,32 @@
+name: Generar APK desde GitHub
+
+on:
+  workflow_dispatch: # Permite activar la compilación manualmente desde la pestaña Actions
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Descargar el código del repositorio
+      uses: actions/checkout@v4
+
+    - name: Configurar entorno de Java JDK 17
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'zulu'
+        java-version: '17'
+
+    - name: Dar permisos de ejecución al compilador de Gradle
+      run: chmod +x ./gradlew
+      continue-on-error: true
+
+    - name: Compilar el archivo APK (Modo Debug)
+      run: ./gradlew assembleDebug
+
+    - name: Guardar y exponer el archivo APK para descargar
+      uses: actions/upload-artifact@v4
+      with:
+        name: Mi-App-De-Laparoscopia
+        path: app/build/outputs/apk/debug/*.apk
+        

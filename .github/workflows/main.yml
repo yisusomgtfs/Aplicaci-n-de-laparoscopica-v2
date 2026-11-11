@@ -22,11 +22,19 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
+      - name: Organizar Archivos Web
+        run: |
+          mkdir -p www
+          # Mueve archivos HTML, JS y CSS sueltos a la carpeta de assets si existen
+          find . -maxdepth 1 -type f \( -name "*.html" -o -name "*.js" -o -name "*.css" \) -exec cp {} www/ \;
+          # Asegura que exista al menos un index.html básico si no se encuentra en la raíz
+          if [ ! -f www/index.html ]; then echo "<html><head><title>App</title></head><body>Actividad Laparoscópica</body></html>" > www/index.html; fi
+
       - name: Configurar Proyecto Web y Android
         run: |
           npm init -y
           npm install @capacitor/core @capacitor/cli
-          npx cap init "App Laparoscopica" "com.yisusomgtfs.laparoscopica" --web-dir=.
+          npx cap init "App Laparoscopica" "com.yisusomgtfs.laparoscopica" --web-dir=www
           npm install @capacitor/android
           npx cap add android
           npx cap sync

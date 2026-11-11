@@ -25,9 +25,7 @@ jobs:
       - name: Organizar Archivos Web
         run: |
           mkdir -p www
-          # Mueve archivos HTML, JS y CSS sueltos a la carpeta de assets si existen
           find . -maxdepth 1 -type f \( -name "*.html" -o -name "*.js" -o -name "*.css" \) -exec cp {} www/ \;
-          # Asegura que exista al menos un index.html básico si no se encuentra en la raíz
           if [ ! -f www/index.html ]; then echo "<html><head><title>App</title></head><body>Actividad Laparoscópica</body></html>" > www/index.html; fi
 
       - name: Configurar Proyecto Web y Android
@@ -38,6 +36,14 @@ jobs:
           npm install @capacitor/android
           npx cap add android
           npx cap sync
+
+      - name: Aplicar Parche de Compatibilidad Gradle (BouncyCastle)
+        run: |
+          # Inyecta una regla de resolución en el build.gradle raíz para forzar una versión compatible de bcprov
+          sed -i '/allprojects {/a \    buildscript {\n        configurations.all {\n            resolutionStrategy.eachDependency { DependencyResolveDetails details ->\n                if (details.requested.group == "org.bouncycastle" && details.requested.name.startsWith("bcprov-")) {\n                    details.useVersion "1.78"\n                }\n            }\n        }\n    }' android/build.gradle
+          
+          # Aplica lo mismo para la configuración general de dependencias de los proyectos
+          sed -i '/allprojects {/a \    configurations.all {\n        resolutionStrategy.eachDependency { DependencyResolveDetails details ->\n            if (details.requested.group == "org.bouncycastle" && details.requested.name.startsWith("bcprov-")) {\n                details.useVersion "1.78"\n            }\n        }\n    }' android/build.gradle
 
       - name: Compilar APK Nativo
         run: |

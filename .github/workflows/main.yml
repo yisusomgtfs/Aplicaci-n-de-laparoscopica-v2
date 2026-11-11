@@ -22,17 +22,34 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Organizar Archivos Web
+      - name: Construir o Localizar Archivos Web Reales
         run: |
-          mkdir -p www
-          find . -maxdepth 1 -type f \( -name "*.html" -o -name "*.js" -o -name "*.css" \) -exec cp {} www/ \;
-          if [ ! -f www/index.html ]; then echo "<html><head><title>App</title></head><body>Actividad Laparoscópica</body></html>" > www/index.html; fi
+          # Si tu repositorio ya tiene un package.json (React, Vite, etc.), intenta compilarlo
+          if [ -f "package.json" ]; then
+            npm install
+            npm run build || true
+          fi
+
+          mkdir -p www_final
+
+          # Busca en qué carpeta se encuentra tu archivo index.html real
+          INDEX_PATH=$(find . -maxdepth 3 -name "index.html" -not -path "./www_final/*" | head -n 1)
+
+          if [ -n "$INDEX_PATH" ]; then
+            SOURCE_DIR=$(dirname "$INDEX_PATH")
+            echo "Archivos encontrados en: $SOURCE_DIR"
+            cp -r "$SOURCE_DIR"/* www_final/
+          else
+            # Si no hay index.html, copia todos los archivos visibles del repositorio
+            cp -r * www_final/ 2>/dev/null || true
+          fi
 
       - name: Configurar Proyecto Web y Android
         run: |
-          npm init -y
+          # Asegura que exista package.json para Capacitor
+          if [ ! -f "package.json" ]; then npm init -y; fi
           npm install @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6
-          npx cap init "App Laparoscopica" "com.yisusomgtfs.laparoscopica" --web-dir=www
+          npx cap init "App Laparoscopica" "com.yisusomgtfs.laparoscopica" --web-dir=www_final
           npx cap add android
           npx cap sync
 

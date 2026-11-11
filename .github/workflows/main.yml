@@ -37,13 +37,10 @@ jobs:
           npx cap add android
           npx cap sync
 
-      - name: Aplicar Parche de Compatibilidad Gradle (BouncyCastle)
+      - name: Actualizar Compilador (Gradle 8.5)
         run: |
-          # Inyecta una regla de resolución en el build.gradle raíz para forzar una versión compatible de bcprov
-          sed -i '/allprojects {/a \    buildscript {\n        configurations.all {\n            resolutionStrategy.eachDependency { DependencyResolveDetails details ->\n                if (details.requested.group == "org.bouncycastle" && details.requested.name.startsWith("bcprov-")) {\n                    details.useVersion "1.78"\n                }\n            }\n        }\n    }' android/build.gradle
-          
-          # Aplica lo mismo para la configuración general de dependencias de los proyectos
-          sed -i '/allprojects {/a \    configurations.all {\n        resolutionStrategy.eachDependency { DependencyResolveDetails details ->\n            if (details.requested.group == "org.bouncycastle" && details.requested.name.startsWith("bcprov-")) {\n                details.useVersion "1.78"\n            }\n        }\n    }' android/build.gradle
+          cd android
+          ./gradlew wrapper --gradle-version=8.5
 
       - name: Compilar APK Nativo
         run: |

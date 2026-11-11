@@ -1,0 +1,6 @@
+{
+  "name": "HGV Auditoría",
+  "description": "Sistema de evidencia operativa y auditoría forense para salas de laparoscopia con control de tiempos, firmas digitales y reportes PDF/CSV.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

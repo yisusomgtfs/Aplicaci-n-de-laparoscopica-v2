@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <link rel="manifest" href="manifest.json">
+    <title>HGV Auditoría Enterprise</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    
+    <!-- CONEXIÓN DE SERVICE WORKER PARA MODO OFFLINE -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                .then(reg => console.log('Sincronización Offline Activa', reg.scope))
+                .catch(err => console.error('Fallo de Sincronización', err));
+            });
+        }
+    </script>
+    
+    <style>
+        * { box-sizing: border-box; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; -webkit-tap-highlight-color: transparent; }
+        body { background-color: #ecf0f1; margin: 0; padding: 0; color: #333; overflow-x: hidden; transition: background-color 0.4s ease, color 0.4s ease; }
+        @keyframes slideUpFade { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        #login-screen { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #1a252f; z-index: 99999; display: flex; flex-direction: column; justify-content: center; align-items: center; color: #fff; transition: opacity 0.5s ease; }
+        #login-screen h1 { margin-bottom: 5px; text-transform: uppercase; font-size: 1.5em; text-align: center; animation: slideUpFade 0.6s ease; }
+        #login-screen p { color: #bdc3c7; margin-bottom: 20px; font-size: 0.8em; text-align: center; animation: slideUpFade 0.7s ease; }
+        .pin-input { font-size: 2em; padding: 10px; width: 150px; text-align: center; letter-spacing: 5px; border-radius: 5px; border: none; margin-bottom: 15px; color: #000; outline: none; transition: box-shadow 0.3s; animation: slideUpFade 0.8s ease; }
+        .pin-input:focus { box-shadow: 0 0 15px rgba(52, 152, 219, 0.5); }
+        .btn-group-login { display: flex; gap: 10px; animation: slideUpFade 0.9s ease; }
+        .btn-login, .btn-bio { color: #fff; border: none; padding: 15px 25px; font-size: 1.1em; font-weight: bold; border-radius: 5px; cursor: pointer; transition: transform 0.2s, background 0.3s; }
+        .btn-login { background: #2980b9; } .btn-bio { background: #27ae60; }
+        .btn-login:active, .btn-bio:active { transform: scale(0.95); }
+        .btn-forgot { background: transparent; color: #bdc3c7; border: none; margin-top: 20px; text-decoration: underline; cursor: pointer; font-size: 0.85em; animation: slideUpFade 1s ease; }
+        #login-error { color: #e74c3c; margin-top: 15px; font-weight: bold; display: none; animation: fadeIn 0.3s ease; }
+
+        .modal-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.8); z-index: 100000; display: none; justify-content: center; align-items: center; animation: fadeIn 0.3s ease; }
+        .modal-content { background: #fff; padding: 25px; border-radius: 8px; width: 90%; max-width: 400px; text-align: center; color: #333; animation: slideUpFade 0.4s ease; }
+        .modal-content input { width: 100%; padding: 10px; margin: 15px 0; border: 1px solid #ccc; border-radius: 4px; font-size: 1.1em; text-align: center; }
+        .modal-btn { background: #2980b9; color: white; padding: 12px; width: 100%; border: none; border-radius: 4px; font-weight: bold; margin-bottom: 10px; cursor: pointer; transition: 0.2s;}
+        .modal-btn:active { transform: scale(0.95); }
+        .modal-btn-cancel { background: #95a5a6; color: white; padding: 12px; width: 100%; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; transition: 0.2s;}
+        .modal-btn-cancel:active { transform: scale(0.95); }
+
+        #night-light-filter { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(255, 140, 0, 0.15); pointer-events: none; z-index: 99998; display: none; transition: opacity 0.5s; }
+        body.night-light #night-light-filter { display: block; animation: fadeIn 1s; }
+
+        body.dark-mode { background-color: #121212; color: #e0e0e0; }
+        body.dark-mode .app-header { background: #000; border-bottom: 1px solid #333; }
+        body.dark-mode .bottom-nav { background: #1e1e1e; border-top: 1px solid #333; box-shadow: 0 -2px 10px rgba(0,0,0,0.8); }
+        body.dark-mode .nav-item { color: #888; }
+        body.dark-mode .nav-item.active { color: #3498db; background: #2c3e50; border-top: 3px solid #3498db; }
+        body.dark-mode .record-card, body.dark-mode .settings-card { background: #1e1e1e; border-left-color: #3498db; color: #ddd; box-shadow: 0 4px 6px rgba(0,0,0,0.5); }
+        body.dark-mode .record-card h3, body.dark-mode .settings-card h3 { color: #fff; border-bottom-color: #333; }
+        body.dark-mode #contenido-pdf { background: #1e1e1e; border-color: #333; color: #e0e0e0; box-shadow: none; }
+        body.dark-mode .col, body.dark-mode .col-full { background: #2c2c2c; border-color: #444; }
+        body.dark-mode input, body.dark-mode select, body.dark-mode textarea { color: #e0e0e0; border-bottom-color: #555; }
+        body.dark-mode .canvas-wrapper { background: #2c2c2c; border-color: #555; }
+        body.dark-mode .header h1, body.dark-mode label { color: #bdc3c7; }
+
+        .app-header { background: #1a252f; color: white; padding: 15px; padding-top: calc(15px + env(safe-area-inset-top)); text-align: center; font-weight: bold; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 5px rgba(0,0,0,0.2); transition: background 0.4s; }
+        .view { display: none; padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
+        .view.active { display: block; animation: slideUpFade 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+
+        #contenido-pdf { width: 100%; max-width: 8.5in; margin: 15px auto; background: #fff; padding: 25px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); border-top: 5px solid #2980b9; position: relative; transition: background 0.4s, color 0.4s; }
+        .doc-header { text-align: center; border-bottom: 2px solid #1a252f; padding-bottom: 10px; margin-bottom: 15px; }
+        .doc-header h1 { margin: 0; font-size: 1.2em; color: #1a252f; text-transform: uppercase; }
+        .doc-header h2 { margin: 5px 0 0 0; font-size: 0.8em; color: #7f8c8d; font-weight: normal; }
+        .row { display: flex; flex-wrap: wrap; margin-bottom: 10px; gap: 10px; }
+        .col { flex: 1; min-width: 130px; background: #f8f9fa; padding: 8px; border-radius: 4px; border: 1px solid #dee2e6; transition: background 0.4s; }
+        .col-full { flex: 100%; background: #f8f9fa; padding: 8px; border-radius: 4px; border: 1px solid #dee2e6; transition: background 0.4s; }
+        label { font-size: 0.65em; font-weight: bold; text-transform: uppercase; color: #2c3e50; margin-bottom: 4px; display: block; }
+        input, select, textarea { width: 100%; border: none; background: transparent; border-bottom: 1px solid #bdc3c7; font-size: 0.95em; padding: 4px 0; outline: none; transition: border-color 0.3s; }
+        input:focus, select:focus, textarea:focus { border-bottom: 2px solid #3498db; }
+        .section-title { background: #1a252f; color: #fff; padding: 6px 10px; font-size: 0.7em; font-weight: bold; text-transform: uppercase; margin: 15px 0 10px 0; border-radius: 3px; }
+        
+        .curp-controls { display: flex; justify-content: space-between; margin-top: 5px; }
+        .file-wrapper { position: relative; overflow: hidden; }
+        .file-wrapper input { position: absolute; top: 0; right: 0; opacity: 0; cursor: pointer; height: 100%; }
+        .btn-foto { background: #1a252f; color: white; border: none; padding: 5px 10px; font-size: 0.7em; border-radius: 3px; font-weight: bold; transition: 0.2s; }
+        .btn-foto:active { transform: scale(0.9); }
+        #preview-container { display: none; position: relative; margin-top: 5px; text-align: center; animation: fadeIn 0.4s; }
+        #preview-curp { max-height: 80px; border: 1px solid #bdc3c7; border-radius: 3px; }
+        .btn-del-foto { position: absolute; top: -5px; right: -5px; background: #e74c3c; color: white; border: none; border-radius: 50%; width: 20px; height: 20px; font-size: 0.6em; cursor: pointer; }
+
+        .sig-container { display: flex; gap: 15px; flex-wrap: wrap; page-break-inside: avoid; }
+        .sig-box { flex: 1; min-width: 200px; page-break-inside: avoid; }
+        .canvas-wrapper { height: 110px; border: 1px dashed #7f8c8d; background: #fff; position: relative; margin-bottom: 5px; transition: background 0.4s; }
+        canvas { width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
+        .btn-limpiar { position: absolute; top: 5px; right: 5px; background: #e74c3c; color: white; border: none; border-radius: 3px; padding: 3px 8px; font-size: 0.6em; transition: 0.2s; cursor: pointer; }
+        .btn-limpiar:active { transform: scale(0.9); }
+        .sig-name input { text-align: center; font-weight: bold; border-bottom: 1px solid #000; }
+        .autoria-footer { text-align: center; font-size: 0.55em; color: #7f8c8d; margin-top: 20px; border-top: 1px dashed #ccc; padding-top: 10px; text-transform: uppercase; }
+
+        .form-actions { display: flex; gap: 10px; padding: 0 15px; max-width: 8.5in; margin: auto; }
+        .btn-main, .btn-sec { color: white; border: none; padding: 15px; font-weight: bold; border-radius: 5px; text-transform: uppercase; transition: transform 0.2s, background 0.3s; cursor: pointer; }
+        .btn-main { flex: 2; background: #2980b9; } .btn-main:active { transform: scale(0.98); background: #2471a3; }
+        .btn-sec { flex: 1; background: #7f8c8d; } .btn-sec:active { transform: scale(0.98); }
+
+        .history-container, .settings-container { padding: 15px; max-width: 800px; margin: auto; }
+        .btn-export { width: 100%; background: #27ae60; color: white; border: none; padding: 15px; font-weight: bold; border-radius: 5px; text-transform: uppercase; margin-bottom: 15px; font-size: 1em; transition: 0.2s; cursor: pointer; }
+        .btn-export:active { transform: scale(0.98); }
+        .record-card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 15px; border-left: 4px solid #2980b9; transition: background 0.4s, color 0.4s; }
+        .record-card h3 { margin: 0 0 5px 0; font-size: 1.1em; color: #1a252f; }
+        .record-card p { margin: 2px 0; font-size: 0.85em; color: #7f8c8d; }
+        .record-actions { display: flex; gap: 10px; margin-top: 12px; border-top: 1px dashed #eee; padding-top: 12px; }
+        .btn-edit-record { flex: 1; background: #f39c12; color: white; border: none; padding: 8px; border-radius: 4px; font-weight: bold; font-size: 0.8em; text-transform: uppercase; cursor: pointer; transition: 0.2s; }
+        .btn-delete-record { flex: 1; background: #e74c3c; color: white; border: none; padding: 8px; border-radius: 4px; font-weight: bold; font-size: 0.8em; text-transform: uppercase; cursor: pointer; transition: 0.2s; }
+        .empty-state { text-align: center; color: #95a5a6; padding: 40px 20px; font-style: italic; }
+
+        .settings-card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 15px; transition: background 0.4s, color 0.4s;}
+        .profile-header { display: flex; align-items: center; gap: 15px; margin-bottom: 20px; }
+        .avatar-wrapper { position: relative; width: 80px; height: 80px; border-radius: 50%; overflow: hidden; border: 3px solid #2980b9; background: #bdc3c7; }
+        .avatar-wrapper img { width: 100%; height: 100%; object-fit: cover; }
+        .avatar-upload { position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.6); color: white; font-size: 0.6em; text-align: center; padding: 3px 0; cursor: pointer; }
+        .settings-card h3 { margin: 0 0 15px 0; font-size: 1em; border-bottom: 1px solid #eee; padding-bottom: 5px; }
+        .toggle-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px dashed #eee; }
+        .security-input { display: flex; gap: 10px; margin-bottom: 10px; }
+        .security-input input { flex: 2; border: 1px solid #ccc; padding: 8px; border-radius: 4px; }
+        .security-input button { flex: 1; background: #2c3e50; color: white; border: none; border-radius: 4px; font-weight: bold; transition: 0.2s; cursor: pointer;}
+        .btn-backup { background: #8e44ad; color: white; border: none; padding: 10px; width: 100%; border-radius: 5px; font-weight: bold; margin-top: 5px; cursor: pointer; }
+        .btn-restore { background: #d35400; color: white; border: none; padding: 10px; width: 100%; border-radius: 5px; font-weight: bold; margin-top: 10px; cursor: pointer; }
+        .btn-danger { background: #c0392b; color: white; border: none; padding: 12px; width: 100%; border-radius: 5px; font-weight: bold; text-transform: uppercase; margin-top: 10px; transition: 0.2s; cursor: pointer;}
+
+        .bottom-nav { position: fixed; bottom: 0; left: 0; width: 100%; background: #fff; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); display: flex; z-index: 1000; transition: background 0.4s; padding-bottom: env(safe-area-inset-bottom); }
+        .nav-item { flex: 1; text-align: center; padding: 12px 0; color: #7f8c8d; font-size: 0.75em; font-weight: bold; text-transform: uppercase; cursor: pointer; transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); border-top: 3px solid transparent; }
+        .nav-item.active { color: #2980b9; border-top: 3px solid #2980b9; background: #f4f6f7; transform: translateY(-2px); }
+        .nav-icon { font-size: 1.6em; display: block; margin-bottom: 2px; transition: transform 0.3s; }
+        .nav-item.active .nav-icon { transform: scale(1.15); }
+
+        #toast { visibility: hidden; min-width: 250px; background-color: #333; color: #fff; text-align: center; border-radius: 20px; padding: 12px 20px; position: fixed; z-index: 10000; left: 50%; bottom: calc(80px + env(safe-area-inset-bottom)); transform: translateX(-50%); font-size: 0.9em; box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
+        #toast.show { visibility: visible; animation: toastFadeIn 0.5s, toastFadeOut 0.5s 2.5s; }
+        @keyframes toastFadeIn { from {bottom: 0; opacity: 0;} to {bottom: calc(80px + env(safe-area-inset-bottom)); opacity: 1;} }
+        @keyframes toastFadeOut { from {bottom: calc(80px + env(safe-area-inset-bottom)); opacity: 1;} to {bottom: 0; opacity: 0;} }
+    </style>
+</head>
+<body>
+<div id="night-light-filter"></div>
+
+<!-- MODAL DE RECUPERACIÓN ORIGINAL -->
+<div id="recovery-modal" class="modal-overlay">
+    <div class="modal-content">
+        <h3 style="margin-top:0;">Recuperar Acceso</h3>
+        <p style="font-size:0.9em; color:#7f8c8d;">Ingrese su Palabra Secreta de Recuperación</p>
+        <input type="password" id="recovery-word-input" placeholder="Palabra Secreta...">
+        <div id="new-pin-section" style="display:none;">
+            <p style="font-size:0.9em; color:#27ae60; font-weight:bold;">Palabra Correcta. Ingrese nuevo PIN:</p>
+            <input type="number" id="new-pin-recovery" placeholder="Nuevo PIN (4 dígitos)" maxlength="4">
+        </div>
+        <button class="modal-btn" id="btn-recovery-action" onclick="validarRecuperacion()">Validar Palabra</button>
+        <button class="modal-btn-cancel" onclick="cerrarRecuperacion()">Cancelar</button>
+        <p id="recovery-error" style="color:#e74c3c; font-size:0.8em; display:none; font-weight:bold;"></p>
+    </div>
+</div>
+
+<!-- MODAL UNIVERSAL PARA AUDITORÍA DE ACCIONES -->
+<div id="universal-modal" class="modal-overlay">
+    <div class="modal-content">
+        <h3 id="um-titulo" style="margin-top:0;">Título</h3>
+        <p id="um-mensaje" style="font-size:0.9em; color:#7f8c8d; margin-bottom: 20px; white-space: pre-wrap;">Mensaje</p>
+        <div style="display:flex; gap:10px;">
+            <button id="um-btn-cancelar" class="modal-btn-cancel" style="flex:1;">Cancelar</button>
+            <button id="um-btn-accion" class="modal-btn" style="flex:1;">Aceptar</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL CUSTOMIZADO DE LIMPIEZA BLINDADA -->
+<div id="limpieza-modal" class="modal-overlay">
+    <div class="modal-content">
+        <h3 id="lm-titulo" style="margin-top:0;">⚠️ Nueva Cirugía</h3>
+        <p id="lm-mensaje" style="font-size:0.9em; color:#7f8c8d; margin-bottom: 20px; white-space: pre-wrap;">¿Desea limpiar el formulario para un nuevo paciente?</p>
+        <div style="display:flex; gap:10px;">
+            <button id="lm-btn-cancelar" class="modal-btn-cancel" style="flex:1;">Cancelar</button>
+            <button id="lm-btn-accion" class="modal-btn" style="flex:1; background:#e74c3c;">Limpiar</button>
+        </div>
+    </div>
+</div>
+
+<div id="login-screen">
+    <h1>Auditoría HGV</h1>
+    <p id="login-author-text">Autor: Jesús Abraham Aguilar Osorio</p>
+    <input type="password" id="pin-input" class="pin-input" placeholder="••••" maxlength="4" inputmode="numeric">
+    <div class="btn-group-login">
+        <button class="btn-login" onclick="verificarPIN()">PIN</button>
+        <button class="btn-bio" onclick="intentarBiometria()">HUELLA</button>
+    </div>
+    <button class="btn-forgot" onclick="abrirRecuperacion()">¿Olvidó su PIN?</button>
+    <div id="login-error">Acceso Denegado.</div>
+</div>
+
+<div id="app-content" style="display:none;">
+    <div class="app-header">SISTEMA DE EVIDENCIA HGV</div>
+    <main id="view-form" class="view active">
+        <div id="contenido-pdf">
+            <div class="doc-header">
+                <h1>BITÁCORA DE EVIDENCIA OPERATIVA</h1>
+                <h2>HGV - DEPARTAMENTO DE LAPAROSCOPIA</h2>
+            </div>
+            <div class="row">
+                <div class="col" style="flex:1.5;"><label>Paciente</label><input type="text" id="paciente" placeholder="Apellidos, Nombre"></div>
+                <div class="col" style="flex:1.2;"><label>Registro/CURP</label>
+                    <div class="curp-controls">
+                        <input type="text" id="curp" style="width:60%; text-transform:uppercase;" maxlength="18" placeholder="Opcional">
+                        <div class="file-wrapper"><button class="btn-foto">📷</button><input type="file" id="foto-curp" accept="image/*" capture="environment"></div>
+                    </div>
+                    <div id="preview-container"><img id="preview-curp"><button class="btn-del-foto" onclick="borrarFoto()">X</button></div>
+                </div>
+                <div class="col" style="flex:0.3; min-width:60px;">
+                    <label>Edad</label>
+                    <input type="number" id="edad" placeholder="Auto / Manual" style="color:#2980b9; font-weight:bold;">
+                </div>
+            </div>
+            <div class="section-title">I. TIEMPOS</div>
+            <div class="row">
+                <div class="col"><label>Fecha</label><input type="text" id="fecha" readonly></div>
+                <div class="col"><label>Técnico Listo</label><input type="text" id="t-listo" readonly onclick="marcarHoraListo();" placeholder="Toque aquí"></div>
+                <div class="col"><label>Inicio Cirugía</label><input type="text" id="t-inicio" readonly onclick="marcarHoraInicio();" placeholder="Toque al iniciar"></div>
+                <div class="col"><label>Fin Cirugía</label><input type="text" id="t-fin" readonly onclick="marcarHoraFin();" placeholder="Toque al finalizar"></div>
+            </div>
+            <div class="section-title">II. SUPERVISIÓN ADSCRITO</div>
+            <div class="row">
+                <div class="col"><label>Llegada</label><input type="time" id="ads-llegada" onchange="calcularEstancia()"></div>
+                <div class="col"><label>Estancia (Min)</label><input type="number" id="ads-estancia" placeholder="Auto-cálculo" style="color:#27ae60; font-weight:bold;"></div>
+                <div class="col"><label>Salida</label><input type="time" id="ads-salida" onchange="calcularEstancia()"></div>
+            </div>
+            <div class="row"><div class="col-full" style="background:transparent; border:none;"><label style="display:inline; cursor:pointer;"><input type="checkbox" id="ads-no-entro" onchange="guardarBorradorAutomatico()"> El adscrito NO ingresó a sala</label></div></div>
+            <div class="section-title">III. CAUSAS DE DESVIACIÓN</div>
+            <div class="row"><div class="col-full"><label>Factor Primario</label>
+                <select id="causa" onchange="guardarBorradorAutomatico()">
+                    <option value="Sin Desviación">Operación en Tiempo Normal</option>
+                    <option value="Camilleros">Atraso Camilleros/Traslado</option>
+                    <option value="Enfermería">Demora Preparación Enfermería</option>
+                    <option value="Paciente">Llegada Tardía Paciente</option>
+                    <option value="Ausencia Adscrito">Ausencia/Retraso Adscrito</option>
+                    <option value="Anestesiología">Retraso Anestesia</option>
+                    <option value="Falta Equipo">Falta Equipo Quirúrgico</option>
+                    <option value="Material">Falla Material Laparoscopía</option>
+                </select>
+            </div></div>
+            <div class="row"><div class="col-full"><label>Observaciones</label><textarea id="observaciones" rows="2" oninput="guardarBorradorAutomatico()"></textarea></div></div>
+            <div class="section-title">IV. FIRMAS DE CONFORMIDAD</div>
+            <div class="sig-container">
+                <div class="sig-box">
+                    <label id="lbl-cargo-tecnico">Técnico de Laparoscopia</label>
+                    <div class="canvas-wrapper"><canvas id="c1"></canvas><button class="btn-limpiar" onclick="limpiar(1)">X</button></div>
+                    <div class="sig-name"><input type="text" id="nombre-tecnico" readonly style="border:none;"></div>
+                </div>
+                <div class="sig-box">
+                    <label>Testigo / Circulante</label>
+                    <div class="canvas-wrapper"><canvas id="c2"></canvas><button class="btn-limpiar" onclick="limpiar(2)">X</button></div>
+                    <div class="sig-name"><input type="text" id="nombre-testigo" placeholder="Nombre y Cargo" oninput="guardarBorradorAutomatico()"></div>
+                </div>
+            </div>
+            <div class="autoria-footer" id="footer-autoria">Sistema de Auditoría Operativa</div>
+        </div>
+        <div class="form-actions">
+            <button class="btn-main" onclick="guardarYGenerarPDF()">Generar PDF Oficial</button>
+            <button class="btn-sec" onclick="iniciarLimpiezaBlindada()">Limpiar</button>
+        </div>
+    </main>
+    <main id="view-history" class="view">
+        <div class="history-container">
+            <button class="btn-export" onclick="exportarCSV()">📥 Exportar Base de Datos (Excel)</button>
+            <h2 style="font-size:1.1em; border-bottom:2px solid #bdc3c7; padding-bottom:5px;">Registros Guardados</h2>
+            <div id="lista-historial"></div>
+        </div>
+    </main>
+    <main id="view-settings" class="view">
+        <div class="settings-container">
+            <div class="settings-card">
+                <h3>👤 Mi Perfil de Autor</h3>
+                <div class="profile-header">
+                    <div class="avatar-wrapper">
+                        <img id="profile-img" src="https://via.placeholder.com/80?text=FOTO" alt="Perfil">
+                        <div class="avatar-upload">Editar<input type="file" id="foto-perfil" accept="image/*" style="position:absolute;top:0;left:0;opacity:0;cursor:pointer;"></div>
+                    </div>
+                    <div style="flex:1;">
+                        <label>Nombre Completo</label>
+                        <input type="text" id="perfil-nombre" placeholder="Tu nombre...">
+                        <label style="margin-top:5px;">Cargo / Puesto</label>
+                        <input type="text" id="perfil-cargo" placeholder="Ej: Técnico de Laparoscopia">
+                    </div>
+                </div>
+                <button onclick="guardarPerfil()" style="background:#2980b9; color:white; border:none; padding:10px; width:100%; border-radius:4px; font-weight:bold; cursor:pointer;">Guardar Datos de Perfil</button>
+            </div>
+            <div class="settings-card">
+                <h3>🎨 Personalización Visual</h3>
+                <div class="toggle-row">
+                    <span style="font-weight:bold; font-size:0.9em;">🌙 Modo Oscuro</span>
+                    <input type="checkbox" id="toggle-dark" style="width:20px; height:20px;" onchange="toggleTheme()">
+                </div>
+                <div class="toggle-row" style="border:none;">
+                    <span style="font-weight:bold; font-size:0.9em;">🕯️ Luz Nocturna (Filtro Ámbar)</span>
+                    <input type="checkbox" id="toggle-night" style="width:20px; height:20px;" onchange="toggleNightLight()">
+                </div>
+            </div>
+            <div class="settings-card" style="border-left-color: #f39c12;">
+                <h3>🔒 Seguridad y Acceso Cifrado</h3>
+                <div class="security-input"><input type="password" id="ajustes-nuevo-pin" placeholder="Nuevo PIN (4 dígitos)" maxlength="4"><button onclick="cambiarPIN()">Guardar PIN</button></div>
+                <div class="security-input"><input type="password" id="ajustes-palabra" placeholder="Palabra de Recuperación..."><button onclick="guardarPalabra()">Guardar Palabra</button></div>
+            </div>
+            <div class="settings-card" style="border-left-color: #8e44ad;">
+                <h3 style="color:#8e44ad;">🔄 Sincronización (IndexedDB)</h3>
+                <button class="btn-backup" onclick="exportarBackupJSON()">⬇️ Exportar Respaldo (.json)</button>
+                <div style="position:relative; margin-top:10px;">
+                    <button class="btn-restore">⬆️ Importar Respaldo (.json)</button>
+                    <input type="file" id="import-json" accept=".json" style="position:absolute; top:0; left:0; width:100%; height:100%; opacity:0; cursor:pointer;">
+                </div>
+            </div>
+            <div class="settings-card" style="border-left-color: #c0392b;">
+                <h3 style="color:#c0392b;">⚠️ Zona de Peligro</h3>
+                <button class="btn-danger" onclick="borrarTodoHistorial()">🗑️ Formatear Base de Datos</button>
+            </div>
+        </div>
+    </main>
+    <nav class="bottom-nav">
+        <div class="nav-item active" onclick="switchView('form', this)"><span class="nav-icon">📝</span>Bitácora</div>
+        <div class="nav-item" onclick="switchView('history', this)"><span class="nav-icon">📊</span>Historial</div>
+        <div class="nav-item" onclick="switchView('settings', this)"><span class="nav-icon">⚙️</span>Ajustes</div>
+    </nav>
+</div>
+<div id="toast">Notificación</div>
+<script>
+    // --- MOTOR CRIPTOGRÁFICO V8.1 (RESILIENCIA PARA WEBVIEWS LOCALES) ---
+    const SALT = "HGV_Laparoscopia_Sec_2026";
+    
+    async function hashSHA256(text) {
+        try {
+            if (!crypto || !crypto.subtle) return btoa(text + SALT); 
+            const msgBuffer = new TextEncoder().encode(text + SALT);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        } catch(e) {
+            return btoa(text + SALT); 
+        }
+    }
+
+    async function initSecurity() {
+        const hashPorDefectoPin = await hashSHA256('2026');
+        const hashPorDefectoPalabra = await hashSHA256('HGV');
+        
+        if(!localStorage.getItem('pin_hash') || localStorage.getItem('pin_hash') !== hashPorDefectoPin) { 
+            localStorage.setItem('pin_hash', hashPorDefectoPin); 
+        }
+        if(!localStorage.getItem('palabra_hash') || localStorage.getItem('palabra_hash') !== hashPorDefectoPalabra) { 
+            localStorage.setItem('palabra_hash', hashPorDefectoPalabra); 
+        }
+    }
+    initSecurity();
+
+    // --- MOTOR INDEXED-DB (Almacenamiento Ilimitado + Borrador) ---
+    const dbName = "HGVAuditoriaDB";
+    function openDB() {
+        return new Promise((resolve, reject) => {
+            const req = indexedDB.open(dbName, 2);
+            req.onupgradeneeded = e => {
+                const db = e.target.result;
+                if(!db.objectStoreNames.contains('registros')) { db.createObjectStore('registros', { keyPath: 'id' }); }
+                if(!db.objectStoreNames.contains('borrador')) { db.createObjectStore('borrador', { keyPath: 'id' }); }
+            };
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+    }
+    
+    async function guardarRegistroBD(registro) {
+        const db = await openDB();
+        return new Promise((res, rej) => {
+            const tx = db.transaction('registros', 'readwrite');
+            tx.objectStore('registros').put(registro);
+            tx.oncomplete = res; tx.onerror = rej;
+        });
+    }
+    async function obtenerRegistrosBD() {
+        const db = await openDB();
+        return new Promise((res, rej) => {
+            const tx = db.transaction('registros', 'readonly');
+            const req = tx.objectStore('registros').getAll();
+            req.onsuccess = () => res(req.result.sort((a,b) => b.timestamp - a.timestamp));
+            req.onerror = rej;
+        });
+    }
+    async function borrarRegistroBD(id) {
+        const db = await openDB();
+        return new Promise((res, rej) => {
+            const tx = db.transaction('registros', 'readwrite');
+            tx.objectStore('registros').delete(id);
+            tx.oncomplete = res; tx.onerror = rej;
+        });
+    }
+    async function limpiarBD() {
+        const db = await openDB();
+        return new Promise((res, rej) => {
+            const tx = db.transaction('registros', 'readwrite');
+            tx.objectStore('registros').clear();
+            tx.oncomplete = res; tx.onerror = rej;
+        });
+    }
+
+    async function guardarBorradorBD(borrador) {
+        const db = await openDB();
+        return new Promise((res, rej) => {
+            const tx = db.transaction('borrador', 'readwrite');
+            tx.objectStore('borrador').put({id: 'draft_activo', data: borrador});
+            tx.oncomplete = res; tx.onerror = rej;
+        });
+    }
+    async function obtenerBorradorBD() {
+        const db = await openDB();
+        return new Promise((res, rej) => {
+            const tx = db.transaction('borrador', 'readonly');
+            const req = tx.objectStore('borrador').get('draft_activo');
+            req.onsuccess = () => res(req.result ? req.result.data : null);
+            req.onerror = rej;
+        });
+    }
+    async function eliminarBorradorBD() {
+        const db = await openDB();
+        return new Promise((res, rej) => {
+            const tx = db.transaction('borrador', 'readwrite');
+            tx.objectStore('borrador').delete('draft_activo');
+            tx.oncomplete = res; tx.onerror = rej;
+        });
+    }
+
+    // --- AUTO-LOCK DE SEGURIDAD ---
+    let autoLockTimer;
+    let visibilityTimeout;
+    const AUTO_LOCK_TIME = 180000; 
+
+    function resetAutoLock() {
+        clearTimeout(autoLockTimer);
+        autoLockTimer = setTimeout(lockApp, AUTO_LOCK_TIME);
+    }
+
+    function lockApp() {
+        if(document.getElementById('login-screen').style.display === 'none') {
+            document.getElementById('app-content').style.display = 'none';
+            document.getElementById('login-screen').style.opacity = '1';
+            document.getElementById('login-screen').style.display = 'flex';
+            document.getElementById('pin-input').value = '';
+            showToast('🔒 Sesión bloqueada por inactividad');
+        }
+    }
+
+    ['touchstart', 'mousemove', 'keypress', 'scroll', 'click'].forEach(evt => document.addEventListener(evt, resetAutoLock, {passive: true}));
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+            visibilityTimeout = setTimeout(lockApp, 15000);
+        } else {
+            clearTimeout(visibilityTimeout);
+            resetAutoLock();
+        }
+    });
+
+    // --- MOTOR UNIVERSAL DE MODALES ---
+    function confirmarAccion(titulo, mensaje, textoAccion, colorAccion, callback) {
+        const modal = document.getElementById('universal-modal');
+        document.getElementById('um-titulo').innerText = titulo;
+        document.getElementById('um-mensaje').innerText = mensaje;
+        const btnCancel = document.getElementById('um-btn-cancelar');
+        const btnAccion = document.getElementById('um-btn-accion');
+
+        btnAccion.innerText = textoAccion;
+        btnAccion.style.background = colorAccion;
+        modal.style.display = 'flex';
+
+        btnCancel.onclick = () => { modal.style.display = 'none'; resetAutoLock(); };
+        btnAccion.onclick = () => { modal.style.display = 'none'; callback(); resetAutoLock(); };
+    }
+
+    async function verificarPIN() { 
+        const inputHash = await hashSHA256(document.getElementById('pin-input').value);
+        if(inputHash === localStorage.getItem('pin_hash')) { 
+            document.getElementById('login-screen').style.opacity = '0'; 
+            setTimeout(accederApp, 400); 
+        } else { 
+            document.getElementById('login-error').style.display = 'block'; 
+            document.getElementById('pin-input').value = ''; 
+        } 
+    }
+    
+    let recoveryStage = 0;
+    function abrirRecuperacion() { document.getElementById('recovery-modal').style.display = 'flex'; document.getElementById('recovery-word-input').style.display = 'block'; document.getElementById('new-pin-section').style.display = 'none'; document.getElementById('btn-recovery-action').innerText = "Validar Palabra"; document.getElementById('recovery-error').style.display = 'none'; document.getElementById('recovery-word-input').value = ''; recoveryStage = 0; }
+    function cerrarRecuperacion() { document.getElementById('recovery-modal').style.display = 'none'; }
+    async function validarRecuperacion() {
+        const errorMsg = document.getElementById('recovery-error');
+        if(recoveryStage === 0) { 
+            const intentoHash = await hashSHA256(document.getElementById('recovery-word-input').value); 
+            if(intentoHash === localStorage.getItem('palabra_hash')) { 
+                document.getElementById('recovery-word-input').style.display = 'none'; document.getElementById('new-pin-section').style.display = 'block'; document.getElementById('btn-recovery-action').innerText = "Guardar Nuevo PIN"; errorMsg.style.display = 'none'; recoveryStage = 1; 
+            } else { errorMsg.innerText = "Palabra Incorrecta."; errorMsg.style.display = 'block'; }
+        } else { 
+            const nuevoPin = document.getElementById('new-pin-recovery').value; 
+            if(nuevoPin.length >= 4) { 
+                localStorage.setItem('pin_hash', await hashSHA256(nuevoPin)); 
+                showToast("PIN actualizado de forma segura."); cerrarRecuperacion(); 
+            } else { errorMsg.innerText = "El PIN debe tener 4 números."; errorMsg.style.display = 'block'; } 
+        }
+    }
+    async function cambiarPIN() { const p = document.getElementById('ajustes-nuevo-pin').value; if(p.length >= 4) { localStorage.setItem('pin_hash', await hashSHA256(p)); showToast("✔ PIN Encriptado y Guardado"); document.getElementById('ajustes-nuevo-pin').value=''; } else showToast("❌ El PIN debe tener 4 dígitos"); }
+    async function guardarPalabra() { const w = document.getElementById('ajustes-palabra').value; if(w.length >= 3) { localStorage.setItem('palabra_hash', await hashSHA256(w)); showToast("✔ Palabra Encriptada y Guardada"); document.getElementById('ajustes-palabra').value=''; } else showToast("❌ Palabra muy corta"); }
+    
+    async function intentarBiometria() { try { if (!window.PublicKeyCredential) throw new Error("No biometría"); await navigator.credentials.get({ publicKey: { challenge: new Uint8Array(32), timeout: 60000 } }); document.getElementById('login-screen').style.opacity = '0'; setTimeout(accederApp, 400); } catch (err) { alert("Huella no disponible. Usa el PIN."); } }
+    document.getElementById('pin-input').addEventListener('keypress', e => { if (e.key === 'Enter') verificarPIN(); });
+    
+    function obtenerFechaEstandar() {
+        const today = new Date();
+        const dd = String(today.getDate()).padStart(2, '0');
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
+        const yyyy = today.getFullYear();
+        return `${dd}-${mm}-${yyyy}`;
+    }
+
+    function comprimirImagen(file, callback) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const img = new Image();
+            img.onload = function() {
+                const canvas = document.createElement('canvas');
+                const MAX_WIDTH = 800;
+                let width = img.width; let height = img.height;
+                if (width > MAX_WIDTH) { height = height * (MAX_WIDTH / width); width = MAX_WIDTH; }
+                canvas.width = width; canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                callback(canvas.toDataURL('image/jpeg', 0.7));
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
+
+    async function accederApp() { 
+        document.getElementById('login-screen').style.display = 'none'; 
+        document.getElementById('app-content').style.display = 'block'; 
+        document.getElementById('fecha').value = obtenerFechaEstandar(); 
+        initCanvas('c1'); initCanvas('c2'); 
+        cargarPerfil(); 
+        cargarHistorialVisual(); 
+        await cargarBorradorAutomatico(); 
+        resetAutoLock(); 
+    }
+    
+    function switchView(viewName, element) { document.querySelectorAll('.view').forEach(v => v.classList.remove('active')); document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active')); document.getElementById('view-' + viewName).classList.add('active'); element.classList.add('active'); if(viewName === 'history') cargarHistorialVisual(); window.scrollTo({ top: 0, behavior: 'smooth' }); resetAutoLock(); }
+    function showToast(message) { const toast = document.getElementById("toast"); toast.innerText = message; toast.className = "show"; setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 3000); }
+    
+    document.getElementById('curp').addEventListener('input', function(e) {
+        let curp = e.target.value.toUpperCase(); e.target.value = curp;
+        if(curp.length >= 10) {
+            let yy = parseInt(curp.substring(4, 6)); let mm = parseInt(curp.substring(6, 8)); let dd = parseInt(curp.substring(8, 10));
+            if(mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31) {
+                let centuryChar = curp.length >= 17 ? curp.charAt(16) : null;
+                let fullYear = yy + (centuryChar && /[A-Z]/.test(centuryChar) ? 2000 : 1900);
+                let birth = new Date(fullYear, mm - 1, dd); let today = new Date();
+                let age = today.getFullYear() - birth.getFullYear(); let m = today.getMonth() - birth.getMonth();
+                if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) { age--; }
+                document.getElementById('edad').value = age; guardarBorradorAutomatico();
+            }
+        } else { document.getElementById('edad').value = ''; }
+    });
+
+    document.querySelectorAll('#view-form input:not([type="file"]), #view-form select, #view-form textarea').forEach(input => {
+        input.addEventListener('input', guardarBorradorAutomatico);
+    });
+
+    function calcularEstancia() {
+        let llegada = document.getElementById('ads-llegada').value;
+        let salida = document.getElementById('ads-salida').value;
+        if(llegada && salida) {
+            let [h1, m1] = llegada.split(':').map(Number);
+            let [h2, m2] = salida.split(':').map(Number);
+            let min1 = h1 * 60 + m1;
+            let min2 = h2 * 60 + m2;
+            if(min2 < min1) min2 += 1440;
+            document.getElementById('ads-estancia').value = min2 - min1;
+            guardarBorradorAutomatico();
+        }
+    }
+    document.getElementById('ads-llegada').addEventListener('change', calcularEstancia);
+    document.getElementById('ads-salida').addEventListener('change', calcularEstancia);
+    
+    function guardarBorradorAutomatico() { 
+        const inputs = document.querySelectorAll('#view-form input:not([type="file"]), #view-form select, #view-form textarea'); 
+        const borrador = {}; 
+        inputs.forEach(input => { borrador[input.id] = input.type === 'checkbox' ? input.checked : input.value; }); 
+        guardarBorradorBD(borrador); 
+    }
+
+    async function cargarBorradorAutomatico() { 
+        const borrador = await obtenerBorradorBD();
+        if (borrador) { 
+            for (const key in borrador) { 
+                const element = document.getElementById(key); 
+                if (element && key !== 'nombre-tecnico' && key !== 'fecha') { 
+                    if (element.type === 'checkbox') element.checked = borrador[key]; 
+                    else element.value = borrador[key]; 
+                } 
+            } 
+            if(document.getElementById('t-listo').value !== '') { document.getElementById('t-listo').style.color = '#27ae60'; document.getElementById('t-listo').style.fontWeight = 'bold'; }
+            if(document.getElementById('t-inicio').value !== '') { document.getElementById('t-inicio').style.color = '#2980b9'; document.getElementById('t-inicio').style.fontWeight = 'bold'; }
+            if(document.getElementById('t-fin').value !== '') { document.getElementById('t-fin').style.color = '#c0392b'; document.getElementById('t-fin').style.fontWeight = 'bold'; }
+        } 
+    }
+    
+    function validarRelojHardware() {
+        if (new Date().getFullYear() < 2026) {
+            showToast("❌ ALERTA: Reloj de dispositivo desincronizado. Verifique la fecha y hora.");
+            return false;
+        }
+        return true;
+    }
+
+    function marcarHoraListo() { 
+        if(!validarRelojHardware()) return;
+        const el = document.getElementById('t-listo'); 
+        if(el.value !== '') { showToast("Sello de tiempo bloqueado."); return; }
+        const now = new Date(); 
+        el.value = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0'); 
+        el.style.color='#27ae60'; el.style.fontWeight='bold'; 
+        guardarBorradorAutomatico(); 
+    }
+
+    function marcarHoraInicio() { 
+        if(!validarRelojHardware()) return;
+        if(document.getElementById('t-listo').value === '') { showToast("❌ Faltó marcar Llegada (Técnico Listo) primero."); return; }
+        const el = document.getElementById('t-inicio'); 
+        if(el.value !== '') { showToast("Sello de Inicio bloqueado."); return; }
+        const now = new Date(); 
+        el.value = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0'); 
+        el.style.color='#2980b9'; el.style.fontWeight='bold'; 
+        guardarBorradorAutomatico(); 
+    }
+
+    function marcarHoraFin() { 
+        if(!validarRelojHardware()) return;
+        if(document.getElementById('t-inicio').value === '') { showToast("❌ Faltó marcar 'Inicio Cirugía' primero."); return; }
+        const el = document.getElementById('t-fin'); 
+        if(el.value !== '') { showToast("Sello de Fin bloqueado."); return; }
+        const now = new Date(); 
+        el.value = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0'); 
+        el.style.color='#c0392b'; el.style.fontWeight='bold'; 
+        guardarBorradorAutomatico(); 
+    }
+    
+    function cargarPerfil() { const perfil = JSON.parse(localStorage.getItem('bitacora_perfil')) || { nombre: "Jesús Abraham Aguilar Osorio", cargo: "Técnico de Laparoscopia", foto: "" }; document.getElementById('perfil-nombre').value = perfil.nombre; document.getElementById('perfil-cargo').value = perfil.cargo; if(perfil.foto) document.getElementById('profile-img').src = perfil.foto; document.getElementById('nombre-tecnico').value = perfil.nombre; document.getElementById('lbl-cargo-tecnico').innerText = perfil.cargo; document.getElementById('footer-autoria').innerText = `Sistema de Auditoría Operativa - Propiedad de ${perfil.nombre}`; document.getElementById('login-author-text').innerText = `Autor: ${perfil.nombre}`; if(localStorage.getItem('theme_dark') === 'true') { document.body.classList.add('dark-mode'); document.getElementById('toggle-dark').checked = true; } if(localStorage.getItem('theme_night') === 'true') { document.body.classList.add('night-light'); document.getElementById('toggle-night').checked = true; } }
+    function guardarPerfil() { const perfil = { nombre: document.getElementById('perfil-nombre').value || "Jesús Abraham Aguilar Osorio", cargo: document.getElementById('perfil-cargo').value || "Técnico de Laparoscopia", foto: document.getElementById('profile-img').src }; localStorage.setItem('bitacora_perfil', JSON.stringify(perfil)); cargarPerfil(); showToast("✔ Perfil Guardado"); }
+    document.getElementById('foto-perfil').addEventListener('change', function(e) { if(e.target.files[0]) { comprimirImagen(e.target.files[0], function(base64) { document.getElementById('profile-img').src = base64; }); } });
+    function toggleTheme() { const isDark = document.getElementById('toggle-dark').checked; if(isDark) { document.body.classList.add('dark-mode'); localStorage.setItem('theme_dark', 'true'); } else { document.body.classList.remove('dark-mode'); localStorage.setItem('theme_dark', 'false'); } }
+    function toggleNightLight() { const isNight = document.getElementById('toggle-night').checked; if(isNight) { document.body.classList.add('night-light'); localStorage.setItem('theme_night', 'true'); } else { document.body.classList.remove('night-light'); localStorage.setItem('theme_night', 'false'); } }
+    document.getElementById('foto-curp').addEventListener('change', function(e) { if(e.target.files[0]) { comprimirImagen(e.target.files[0], function(base64) { document.getElementById('preview-curp').src = base64; document.getElementById('preview-container').style.display = 'block'; }); } });
+    function borrarFoto() { document.getElementById('foto-curp').value = ''; document.getElementById('preview-curp').src = ''; document.getElementById('preview-container').style.display = 'none'; }
+    function initCanvas(id) { const c = document.getElementById(id); const ctx = c.getContext('2d'); c.width = c.offsetWidth; c.height = c.offsetHeight; let draw = false; c.onmousedown = () => draw = true; c.onmouseup = () => { draw = false; ctx.beginPath(); }; c.onmousemove = e => { if(!draw) return; const r = c.getBoundingClientRect(); ctx.lineTo(e.clientX - r.left, e.clientY - r.top); ctx.stroke(); }; c.addEventListener('touchstart', e => { draw = true; ctx.beginPath(); e.preventDefault(); }, {passive: false}); c.addEventListener('touchmove', e => { if(!draw) return; const r = c.getBoundingClientRect(); ctx.lineTo(e.touches[0].clientX - r.left, e.touches[0].clientY - r.top); ctx.stroke(); e.preventDefault(); }, {passive: false}); }
+    function limpiar(id) { const c = document.getElementById('c'+id); c.getContext('2d').clearRect(0,0,c.width,c.height); }
+    
+    async function guardarYGenerarPDF() {
+        if(!document.getElementById('paciente').value) { alert("Ingrese nombre del paciente."); return; }
+        
+        const adsNoEntro = document.getElementById('ads-no-entro').checked;
+        const adsLlegada = document.getElementById('ads-llegada').value;
+        const adsSalida = document.getElementById('ads-salida').value;
+
+        if (!adsNoEntro) {
+            if (!adsLlegada || !adsSalida) {
+                showToast("❌ Bloqueo Forense: Registre Llegada y Salida del Adscrito, o marque que NO ingresó a sala.");
+                return;
+            }
+        }
+        
+        let obs = document.getElementById('observaciones').value;
+        const rawState = {}; 
+        document.querySelectorAll('#view-form input:not([type="file"]), #view-form select, #view-form textarea').forEach(input => { rawState[input.id] = input.type === 'checkbox' ? input.checked : input.value; });
+        rawState['c1_base64'] = document.getElementById('c1').toDataURL(); 
+        rawState['c2_base64'] = document.getElementById('c2').toDataURL();
+        
+        const nuevoRegistro = { 
+            id: (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : new Date().getTime().toString(), 
+            timestamp: Date.now(),
+            fecha: obtenerFechaEstandar(), 
+            paciente: document.getElementById('paciente').value, 
+            edad: document.getElementById('edad').value, 
+            curp: document.getElementById('curp').value, 
+            causa: document.getElementById('causa').value, 
+            ads_no_entro: adsNoEntro ? 'SI' : 'NO', 
+            observaciones: obs, 
+            raw_data: rawState 
+        };
+
+        await guardarRegistroBD(nuevoRegistro);
+        
+        const element = document.getElementById('contenido-pdf'); window.scrollTo(0, 0); 
+        const wasDark = document.body.classList.contains('dark-mode'); if(wasDark) document.body.classList.remove('dark-mode');
+        const originalStyles = { w: element.style.width, maxW: element.style.maxWidth, shadow: element.style.boxShadow, p: element.style.padding };
+        element.style.width = '800px'; element.style.maxWidth = '800px'; element.style.boxShadow = 'none'; element.style.padding = '30px'; 
+        document.querySelectorAll('.btn-limpiar, .btn-del-foto, .file-wrapper').forEach(b => b.style.display = 'none');
+        const opt = { margin: 0.2, filename: `Auditoria_HGV_${obtenerFechaEstandar()}_${document.getElementById('paciente').value.replace(/\s+/g, '_')}.pdf`, image: { type: 'jpeg', quality: 1 }, html2canvas: { scale: 2, useCORS: true, scrollY: 0, windowWidth: 800 }, jsPDF: { unit: 'in', format: 'legal', orientation: 'portrait' } };
+        showToast("Generando PDF Oficial...");
+        html2pdf().set(opt).from(element).save().then(() => {
+            element.style.width = originalStyles.w; element.style.maxWidth = originalStyles.maxW; element.style.boxShadow = originalStyles.shadow; element.style.padding = originalStyles.p;
+            document.querySelectorAll('.btn-limpiar, .file-wrapper').forEach(b => b.style.display = 'inline-block'); document.querySelectorAll('.btn-del-foto').forEach(b => b.style.display = 'block');
+            if(wasDark) document.body.classList.add('dark-mode'); 
+            eliminarBorradorBD(); 
+            showToast("✔ Registro Guardado en Base de Datos");
+        });
+    }
+
+    function iniciarLimpiezaBlindada() {
+        const tListoActual = document.getElementById('t-listo').value;
+        const tInicioActual = document.getElementById('t-inicio').value;
+        const tFinActual = document.getElementById('t-fin').value;
+        
+        const modal = document.getElementById('limpieza-modal');
+        const titulo = document.getElementById('lm-titulo');
+        const mensaje = document.getElementById('lm-mensaje');
+        const btnCancel = document.getElementById('lm-btn-cancelar');
+        const btnAccion = document.getElementById('lm-btn-accion');
+
+        modal.style.display = 'flex';
+        titulo.innerText = '⚠️ Nueva Cirugía';
+        mensaje.innerText = '¿Desea limpiar el formulario para un nuevo paciente?';
+        btnCancel.innerText = 'Cancelar';
+        btnAccion.innerText = 'Limpiar';
+        btnAccion.style.background = '#e74c3c'; 
+
+        btnCancel.onclick = () => { modal.style.display = 'none'; resetAutoLock(); };
+
+        btnAccion.onclick = () => {
+            if(tListoActual !== "" || tInicioActual !== "" || tFinActual !== "") {
+                titulo.innerText = '🛡️ Protección de Tiempos';
+                mensaje.innerText = 'Se han detectado sellos de tiempo bloqueados en el formulario.\n\n¿Desea MANTENER estas horas para el siguiente paciente o destruir todo el registro?';
+                btnCancel.innerText = 'Mantener Tiempos';
+                btnCancel.style.background = '#27ae60'; 
+                btnCancel.style.color = 'white';
+                btnAccion.innerText = 'Borrar Todo';
+                btnAccion.style.background = '#c0392b'; 
+
+                btnCancel.onclick = () => { ejecutarLimpiezaDOM(true); modal.style.display = 'none'; btnCancel.style.background = '#95a5a6'; resetAutoLock(); };
+                btnAccion.onclick = () => { ejecutarLimpiezaDOM(false); modal.style.display = 'none'; btnCancel.style.background = '#95a5a6'; resetAutoLock(); };
+            } else {
+                ejecutarLimpiezaDOM(false);
+                modal.style.display = 'none';
+                resetAutoLock();
+            }
+        };
+    }
+
+    function ejecutarLimpiezaDOM(mantenerHora) {
+        const tListoActual = document.getElementById('t-listo').value;
+        const tInicioActual = document.getElementById('t-inicio').value;
+        const tFinActual = document.getElementById('t-fin').value;
+
+        document.querySelectorAll('input[type="text"]:not(#fecha):not(#nombre-tecnico), input[type="time"], input[type="number"], textarea').forEach(i => i.value = ''); 
+        document.getElementById('ads-no-entro').checked = false; 
+        document.getElementById('causa').selectedIndex = 0; 
+        
+        if (mantenerHora) {
+            document.getElementById('t-listo').value = tListoActual;
+            document.getElementById('t-inicio').value = tInicioActual;
+            document.getElementById('t-fin').value = tFinActual;
+        } else {
+            document.getElementById('t-listo').style.color = ''; 
+            document.getElementById('t-listo').style.fontWeight = 'normal'; 
+            document.getElementById('t-inicio').style.color = '';
+            document.getElementById('t-inicio').style.fontWeight = 'normal';
+            document.getElementById('t-fin').style.color = '';
+            document.getElementById('t-fin').style.fontWeight = 'normal';
+        }
+
+        borrarFoto(); limpiar(1); limpiar(2); window.scrollTo(0,0); 
+        eliminarBorradorBD(); 
+        if (mantenerHora) guardarBorradorAutomatico();
+        
+        showToast(mantenerHora ? "Datos borrados. Tiempos Conservados." : "Formulario totalmente limpio.");
+    }
+
+    async function cargarHistorialVisual() {
+        const data = await obtenerRegistrosBD(); 
+        const container = document.getElementById('lista-historial');
+        if(data.length === 0) { container.innerHTML = "<div class='empty-state'>Aún no hay registros en la base de datos local.</div>"; return; }
+        container.innerHTML = "";
+        data.forEach((r) => {
+            const card = document.createElement('div'); card.className = 'record-card';
+            card.innerHTML = `<h3>👤 ${r.paciente} ${r.edad ? '('+r.edad+' años)' : ''}</h3><p><strong>Fecha:</strong> ${r.fecha} | <strong>Causa:</strong> ${r.causa}</p>
+                <div class="record-actions"><button class="btn-edit-record" onclick="editarRegistroIndividual('${r.id}')">✏️ Editar</button><button class="btn-delete-record" onclick="borrarRegistroIndividual('${r.id}')">🗑️ Borrar</button></div>`;
+            container.appendChild(card);
+        });
+    }
+
+    function editarRegistroIndividual(id) {
+        confirmarAccion('✏️ Editar Registro', '¿Cargar este registro en el formulario principal para corregirlo?', 'Cargar Registro', '#f39c12', async () => {
+            const registros = await obtenerRegistrosBD();
+            const record = registros.find(r => r.id === id);
+            
+            if(record && record.raw_data) { 
+                for (const key in record.raw_data) { 
+                    const el = document.getElementById(key); 
+                    if(el && key !== 'fecha' && key !== 'nombre-tecnico') { 
+                        if(el.type === 'checkbox') el.checked = record.raw_data[key]; 
+                        else el.value = record.raw_data[key]; 
+                    } 
+                } 
+                if(record.raw_data.c1_base64) { const img1 = new Image(); img1.onload = () => { limpiar(1); document.getElementById('c1').getContext('2d').drawImage(img1, 0, 0); }; img1.src = record.raw_data.c1_base64; }
+                if(record.raw_data.c2_base64) { const img2 = new Image(); img2.onload = () => { limpiar(2); document.getElementById('c2').getContext('2d').drawImage(img2, 0, 0); }; img2.src = record.raw_data.c2_base64; }
+                
+                if(document.getElementById('t-listo').value !== '') { document.getElementById('t-listo').style.color = '#27ae60'; document.getElementById('t-listo').style.fontWeight = 'bold'; }
+                if(document.getElementById('t-inicio').value !== '') { document.getElementById('t-inicio').style.color = '#2980b9'; document.getElementById('t-inicio').style.fontWeight = 'bold'; }
+                if(document.getElementById('t-fin').value !== '') { document.getElementById('t-fin').style.color = '#c0392b'; document.getElementById('t-fin').style.fontWeight = 'bold'; }
+            }
+            
+            await borrarRegistroBD(id);
+            guardarBorradorAutomatico(); 
+            switchView('form', document.querySelectorAll('.nav-item')[0]); 
+            showToast("Registro cargado. Sellos de tiempo bloqueados.");
+        });
+    }
+
+    function borrarRegistroIndividual(id) { 
+        confirmarAccion('🗑️ Borrar Registro', '¿Está completamente seguro que desea borrar este registro de forma permanente?', 'Eliminar', '#e74c3c', async () => {
+            await borrarRegistroBD(id);
+            cargarHistorialVisual(); 
+            showToast("Registro eliminado de la base de datos.");
+        });
+    }
+    
+    async function exportarCSV() {
+        const data = await obtenerRegistrosBD(); 
+        if(data.length === 0) { showToast("❌ No hay registros para exportar"); return; }
+        
+        let csv = "ID_Cirugia,Fecha,Paciente,Edad,CURP,Hora_Listo,Hora_Inicio,Hora_Fin,Llegada_Adscrito,Salida_Adscrito,Estancia_Adscrito_Min,Causa_Desviacion,Adscrito_Ausente,Observaciones\n"; 
+        
+        data.forEach(r => { 
+            const rd = r.raw_data || {};
+            const tListo = rd['t-listo'] || '';
+            const tInicio = rd['t-inicio'] || '';
+            const tFin = rd['t-fin'] || '';
+            const adsLlegada = rd['ads-llegada'] || '';
+            const adsSalida = rd['ads-salida'] || '';
+            const adsEstancia = rd['ads-estancia'] || '';
+            
+            const pacSaneado = `"${r.paciente || ''}"`;
+            const obsSaneada = `"${r.observaciones ? r.observaciones.replace(/"/g, '""') : ''}"`;
+
+            csv += `${r.id},${r.fecha},${pacSaneado},${r.edad||''},${r.curp},${tListo},${tInicio},${tFin},${adsLlegada},${adsSalida},${adsEstancia},${r.causa},${r.ads_no_entro},${obsSaneada}\n`; 
+        });
+        
+        const blob = new Blob(["\uFEFF" + csv], {type: 'text/csv;charset=utf-8;'}); 
+        const url = URL.createObjectURL(blob); 
+        const a = document.createElement('a'); 
+        a.href = url; 
+        a.download = `Auditoria_HGV_Data_${obtenerFechaEstandar()}.csv`; 
+        a.click(); 
+        URL.revokeObjectURL(url); 
+        showToast("✔ Excel Forense Exportado");
+    }
+
+    async function exportarBackupJSON() { 
+        const data = await obtenerRegistrosBD();
+        if(data.length === 0) { showToast("❌ Base de datos vacía"); return; } 
+        const blob = new Blob([JSON.stringify(data)], {type: 'application/json'}); 
+        const url = URL.createObjectURL(blob); 
+        const a = document.createElement('a'); a.href = url; a.download = `Respaldo_HGV_${obtenerFechaEstandar()}.json`; a.click(); 
+        URL.revokeObjectURL(url); showToast("✔ Respaldo Exportado"); 
+    }
+    
+    document.getElementById('import-json').addEventListener('change', function(e) { 
+        const file = e.target.files[0]; if(!file) return; 
+        const reader = new FileReader(); 
+        reader.onload = function(event) { 
+            try { 
+                const importedData = JSON.parse(event.target.result); 
+                if(Array.isArray(importedData)) { 
+                    confirmarAccion('📥 Importar Respaldo', `Se encontraron ${importedData.length} registros.\n¿Desea combinarlos con su historial actual de forma segura?`, 'Combinar', '#27ae60', async () => {
+                        const currentData = await obtenerRegistrosBD();
+                        const currentIds = new Set(currentData.map(r => r.id));
+                        const nuevosRegistros = importedData.filter(r => r.id ? !currentIds.has(r.id) : true);
+                        
+                        for(const r of nuevosRegistros) { await guardarRegistroBD(r); }
+
+                        cargarHistorialVisual(); showToast(`✔ ${nuevosRegistros.length} Registros Importados`); 
+                    });
+                } else { throw new Error("Formato inválido"); } 
+            } catch(error) { showToast("❌ Archivo JSON no válido"); } 
+            document.getElementById('import-json').value = ''; 
+        }; 
+        reader.readAsText(file); 
+    });
+    
+    function borrarTodoHistorial() { 
+        confirmarAccion('⚠️ ALERTA DE DESTRUCCIÓN', 'Está a punto de borrar TODA la base de datos de auditoría.\n\nEsta acción es irreversible y destruirá todas sus evidencias locales.', 'Formatear', '#c0392b', async () => {
+            await limpiarBD();
+            cargarHistorialVisual(); 
+            showToast("Base de datos formateada por completo.");
+        });
+    }
+</script>
+</body>
+</html>
